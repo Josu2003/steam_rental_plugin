@@ -16,6 +16,39 @@ import telebot.types
 
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 
+# --- Система ключей ---
+# Тут должны храниться все ключи, которые вы раздаете.
+# В реальной системе это лучше хранить в отдельном JSON-файле или БД.
+VALID_KEYS = {"KEY12345678", "KEY7890ABCD", "KEY_FROM_GENERATOR"} 
+
+# Хранилище активированных ключей: {user_id: key}
+ACTIVATED_KEYS = {} 
+
+# Состояние для отслеживания, кто из пользователей ждет ввода ключа: {chat_id: True}
+USER_WAITING_FOR_KEY = {} 
+
+# Функции для сохранения/загрузки ACTIVATED_KEYS из файла (очень важно для постоянства!)
+def load_activated_keys():
+    try:
+        with open(os.path.join(DATA_DIR, "activated_keys.json"), "r") as f:
+            global ACTIVATED_KEYS
+            # Ключи словаря должны быть int, если это user_id
+            ACTIVATED_KEYS = {int(k): v for k, v in json.load(f).items()}
+            logger.info(f"{LOGGER_PREFIX} Загружено {len(ACTIVATED_KEYS)} активированных ключей.")
+    except Exception as e:
+        logger.warning(f"{LOGGER_PREFIX} Не удалось загрузить activated_keys.json: {e}")
+
+def save_activated_keys():
+    try:
+        with open(os.path.join(DATA_DIR, "activated_keys.json"), "w") as f:
+            json.dump(ACTIVATED_KEYS, f, indent=4)
+    except Exception as e:
+        logger.error(f"{LOGGER_PREFIX} Ошибка сохранения activated_keys.json: {e}")
+
+# Вызовите load_activated_keys() при инициализации плагина, 
+# а save_activated_keys() перед выходом или после каждой активации.
+# ----------------------
+
 # Информация о плагине (обязательные поля)
 NAME = "Auto_fxck"
 VERSION = "6.6.7"
@@ -1947,6 +1980,73 @@ def interactive_add_account_start_callback(call=None, *args, **kwargs):
             CARDINAL.telegram.bot.answer_callback_query(call.id, f"Ошибка: {str(e)[:50]}")
         except:
             pass
+        
+        # Замените ваш существующий обработчик команды /srent_menu на этот
+@CARDINAL.telegram.msg_handler(commands=['srent_menu'])
+def srent_menu_command(message):
+    user_id = message.chat.id
+    
+    # ПРОВЕРКА КЛЮЧА
+    # Проверяем, есть ли у пользователя активированный ключ
+    if user_id in ACTIVATED_KEYS and ACTIVATED_KEYS[user_id] in VALID_KEYS:
+        # 🔑 Ключ найден и активен - показываем меню
+        # Вызовите вашу функцию, которая показывает главное меню плагина
+        # show_main_rental_menu(message) 
+        CARDINAL.telegram.bot.send_message(
+            user_id,
+            "🔓 **Добро пожаловать в меню аренды!**", # Это пример, замените на ваш вызов меню
+            parse_mode="HTML"
+        )
+        return
+
+    # ❌ Ключа нет - просим ввести
+    CARDINAL.telegram.bot.send_message(
+        user_id,
+        "🔐 **Для доступа к меню введите ваш ключ активации:**",
+        parse_mode="HTML"
+    )
+    # Переводим пользователя в состояние ожидания ключа
+    USER_WAITING_FOR_KEY[user_id] = True
+
+    # Обработчик, который ловит любое следующее сообщение от пользователя, 
+# находящегося в состоянии USER_WAITING_FOR_KEY
+@CARDINAL.telegram.msg_handler(func=lambda message: message.chat.id in USER_WAITING_FOR_KEY)
+def key_input_handler(message):
+    user_id = message.chat.id
+    key = message.text.strip().upper() # Приводим к верхнему регистру для соответствия формату
+
+    # 1. Проверка на валидность ключа
+    if key in VALID_KEYS:
+        
+        # 2. Проверка, не активирован ли ключ другим пользователем
+        if key in ACTIVATED_KEYS.values():
+             CARDINAL.telegram.bot.send_message(
+                user_id,
+                "❌ **Этот ключ уже используется.** Пожалуйста, введите другой ключ или обратитесь в поддержку.",
+                parse_mode="HTML"
+            )
+             return # Останавливаем обработку
+        
+        # 3. Успешная активация!
+        ACTIVATED_KEYS[user_id] = key
+        USER_WAITING_FOR_KEY.pop(user_id, None) # Выводим из состояния ожидания
+        save_activated_keys() # Сохраняем изменения
+        
+        CARDINAL.telegram.bot.send_message(
+            user_id,
+            "✅ **Ключ успешно активирован!** Доступ предоставлен.",
+            parse_mode="HTML"
+        )
+        # Показываем меню, вызывая обработчик команды снова
+        srent_menu_command(message) 
+
+    else:
+        # Неверный ключ
+        CARDINAL.telegram.bot.send_message(
+            user_id,
+            "❌ **Неверный ключ.** Пожалуйста, проверьте правильность ввода и попробуйте еще раз.",
+            parse_mode="HTML"
+        )
 
 # Добавим новый обработчик для кнопки отмены
 def cancel_add_account_callback(call=None, *args, **kwargs):
