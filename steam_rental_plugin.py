@@ -1671,19 +1671,6 @@ def order_handler(c, event, *args):
         except:
             pass
 
-# Глобальные привязки (обязательные)
-BIND_TO_PRE_INIT = [init_plugin]
-BIND_TO_NEW_MESSAGE = [message_handler]
-BIND_TO_NEW_ORDER = [order_handler]  # Исправлено
-BIND_TO_DELETE = []
-BIND_TO_API = {
-    "start_rent_plugin": start_rent_plugin, 
-    "stop_rent_plugin": stop_rent_plugin,
-    "add_steam_account": add_steam_account,
-    "check_rentals": check_rentals,
-    "delete_steam_account": delete_steam_account,
-    "set_auto_start": set_auto_start
-}
 
 # Интерактивное добавление аккаунта
 def interactive_add_account_start(message):
@@ -4578,6 +4565,20 @@ def init_plugin(c):
     except Exception as e:
         logger.error(f"{LOGGER_PREFIX} Ошибка при инициализации плагина: {e}")
         return False
+    
+# Глобальные привязки (обязательные)
+BIND_TO_PRE_INIT = [init_plugin]
+BIND_TO_NEW_MESSAGE = [message_handler]
+BIND_TO_NEW_ORDER = [order_handler]  # Исправлено
+BIND_TO_DELETE = []
+BIND_TO_API = {
+    "start_rent_plugin": start_rent_plugin, 
+    "stop_rent_plugin": stop_rent_plugin,
+    "add_steam_account": add_steam_account,
+    "check_rentals": check_rentals,
+    "delete_steam_account": delete_steam_account,
+    "set_auto_start": set_auto_start
+}
 
 
 # ✅ FIXED TelegramHandler для совместимости с обычными Telegram ботами
