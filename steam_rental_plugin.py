@@ -89,7 +89,7 @@ def is_license_valid(user_id):
     """Проверяет валидность ключа"""
     license_data = load_user_key()
     if not license_data:
-        return False, "❌ Нет активированного ключа. Используй /activate КЛЮЧ"
+        return False, "❌ Нет активированного ключа. Используй /activate XXXX-XXXX-XXXX-XXXX"
 
     key = license_data.get("key")
     keys = fetch_keys()
@@ -103,7 +103,8 @@ def is_license_valid(user_id):
         return False, "⏰ Срок действия ключа истёк"
 
     if key_data["user_id"] and key_data["user_id"] != user_id:
-        return False, "🔒 Ключ активирован другим пользователем"
+        return False, "🔒 Ключ активирован другим пользователем\n"
+    "Преобрести ключ можно тут @xx00xxdanu"
 
     return True, "✅ Лицензия активна"
 
@@ -111,24 +112,28 @@ def activate_key(message, CARDINAL):
     """Активация ключа через /activate"""
     parts = message.text.strip().split(" ")
     if len(parts) < 2:
-        CARDINAL.telegram.bot.send_message(message.chat.id, "⚠️ Используй: /activate КЛЮЧ")
+        CARDINAL.telegram.bot.send_message(message.chat.id, "⚠️ Используй: /activate XXXX-XXXX-XXXX-XXXX\n"
+                                                            "Преобрести ключ можно тут @xx00xxdanu")
         return
 
     key = parts[1].strip()
     keys = fetch_keys()
 
     if key not in keys:
-        CARDINAL.telegram.bot.send_message(message.chat.id, "❌ Ключ не найден")
+        CARDINAL.telegram.bot.send_message(message.chat.id, "❌ Ключ не найден\n"
+                                                            "Преобрести ключ можно тут @xx00xxdanu")
         return
 
     key_data = keys[key]
     expires_at = datetime.fromisoformat(key_data["expires_at"])
     if datetime.now() > expires_at:
-        CARDINAL.telegram.bot.send_message(message.chat.id, "⏰ Срок действия ключа истёк")
+        CARDINAL.telegram.bot.send_message(message.chat.id, "⏰ Срок действия ключа истёк\n"
+                                                            "Преобрести ключ можно тут @xx00xxdanu")
         return
 
     if key_data["user_id"] and key_data["user_id"] != message.chat.id:
-        CARDINAL.telegram.bot.send_message(message.chat.id, "🔒 Ключ уже используется другим пользователем")
+        CARDINAL.telegram.bot.send_message(message.chat.id, "🔒 Ключ уже используется другим пользователем\n"
+                                                            "Преобрести ключ можно тут @xx00xxdanu")
         return
 
     # сохраняем локально
