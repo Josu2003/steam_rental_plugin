@@ -89,9 +89,9 @@ def is_license_valid(user_id):
     """Проверяет валидность ключа"""
     license_data = load_user_key()
     if not license_data:
-        return False, """❌ Нет активированного ключа. Используй /activate XXXX-XXXX-XXXX-XXXX
-                         Преобрести ключ можно тут @xx00xxdanu
-                      """
+        return False, "❌ Нет активированного ключа. Используй /activate XXXX-XXXX-XXXX-XXXX\n\n" + \
+    "Преобрести ключ можно тут @xx00xxdanu\n"
+
     key = license_data.get("key")
     keys = fetch_keys()
 
