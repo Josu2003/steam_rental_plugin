@@ -4317,6 +4317,62 @@ def edit_binding_time_callback(call=None, binding_hash=None, *args, **kwargs):
             CARDINAL.telegram.bot.answer_callback_query(call.id, f"Ошибка: {str(e)[:50]}")
         except:
             pass
+
+
+def delete_binding_callback(call=None, binding_hash=None, *args, **kwargs):
+    if args and isinstance(args[0], telebot.types.CallbackQuery):
+        call = args[0]
+    if not isinstance(call, telebot.types.CallbackQuery):
+        return
+    """Удаляет привязку лота"""
+    try:
+        # Проверяем, существует ли хеш в нашем словаре
+        if binding_hash not in binding_hash_map:
+            CARDINAL.telegram.bot.answer_callback_query(call.id, "Привязка не найдена")
+            return
+        
+        # Получаем название лота по хешу
+        lot_name = binding_hash_map[binding_hash]
+        
+        # Проверяем, существует ли привязка для указанного лота
+        if lot_name not in lot_bindings:
+            CARDINAL.telegram.bot.answer_callback_query(call.id, "Привязка не найдена")
+            return
+        
+        # Сохраняем данные перед удалением для отображения
+        binding = lot_bindings[lot_name]
+        account_type = binding.get("account_type", "Не указан")
+        duration_hours = binding.get("duration_hours", 0)
+        
+        # Удаляем привязку
+        del lot_bindings[lot_name]
+        save_lot_bindings()
+        
+        # Обновляем хеш-карту
+        binding_hash_map.pop(binding_hash, None)
+        
+        # Создаем клавиатуру для возврата к списку привязок
+        markup = InlineKeyboardMarkup()
+        markup.row(InlineKeyboardButton("⬅️ К привязкам", callback_data="srent_lot_bindings"))
+        
+        CARDINAL.telegram.bot.edit_message_text(
+            "✅ <b>Привязка удалена!</b>\n\n"
+            f"<b>🔹 Название лота:</b> {lot_name}\n"
+            f"<b>🔹 Тип аккаунта:</b> {account_type}\n"
+            f"<b>🔹 Срок аренды:</b> {duration_hours} ч.",
+            call.message.chat.id,
+            call.message.message_id,
+            reply_markup=markup,
+            parse_mode="HTML"
+        )
+        
+        CARDINAL.telegram.bot.answer_callback_query(call.id, "Привязка успешно удалена")
+    except Exception as e:
+        logger.error(f"{LOGGER_PREFIX} Ошибка удаления привязки: {e}")
+        try:
+            CARDINAL.telegram.bot.answer_callback_query(call.id, f"Ошибка: {str(e)[:50]}")
+        except:
+            pass
         
 # Основная функция инициализации
 def init_plugin(c):
@@ -4523,62 +4579,6 @@ def init_plugin(c):
         logger.error(f"{LOGGER_PREFIX} Ошибка при инициализации плагина: {e}")
         return False
 
-
-
-def delete_binding_callback(call=None, binding_hash=None, *args, **kwargs):
-    if args and isinstance(args[0], telebot.types.CallbackQuery):
-        call = args[0]
-    if not isinstance(call, telebot.types.CallbackQuery):
-        return
-    """Удаляет привязку лота"""
-    try:
-        # Проверяем, существует ли хеш в нашем словаре
-        if binding_hash not in binding_hash_map:
-            CARDINAL.telegram.bot.answer_callback_query(call.id, "Привязка не найдена")
-            return
-        
-        # Получаем название лота по хешу
-        lot_name = binding_hash_map[binding_hash]
-        
-        # Проверяем, существует ли привязка для указанного лота
-        if lot_name not in lot_bindings:
-            CARDINAL.telegram.bot.answer_callback_query(call.id, "Привязка не найдена")
-            return
-        
-        # Сохраняем данные перед удалением для отображения
-        binding = lot_bindings[lot_name]
-        account_type = binding.get("account_type", "Не указан")
-        duration_hours = binding.get("duration_hours", 0)
-        
-        # Удаляем привязку
-        del lot_bindings[lot_name]
-        save_lot_bindings()
-        
-        # Обновляем хеш-карту
-        binding_hash_map.pop(binding_hash, None)
-        
-        # Создаем клавиатуру для возврата к списку привязок
-        markup = InlineKeyboardMarkup()
-        markup.row(InlineKeyboardButton("⬅️ К привязкам", callback_data="srent_lot_bindings"))
-        
-        CARDINAL.telegram.bot.edit_message_text(
-            "✅ <b>Привязка удалена!</b>\n\n"
-            f"<b>🔹 Название лота:</b> {lot_name}\n"
-            f"<b>🔹 Тип аккаунта:</b> {account_type}\n"
-            f"<b>🔹 Срок аренды:</b> {duration_hours} ч.",
-            call.message.chat.id,
-            call.message.message_id,
-            reply_markup=markup,
-            parse_mode="HTML"
-        )
-        
-        CARDINAL.telegram.bot.answer_callback_query(call.id, "Привязка успешно удалена")
-    except Exception as e:
-        logger.error(f"{LOGGER_PREFIX} Ошибка удаления привязки: {e}")
-        try:
-            CARDINAL.telegram.bot.answer_callback_query(call.id, f"Ошибка: {str(e)[:50]}")
-        except:
-            pass
 
 # ✅ FIXED TelegramHandler для совместимости с обычными Telegram ботами
 class TelegramHandler:
