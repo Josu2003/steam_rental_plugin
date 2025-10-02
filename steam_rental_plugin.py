@@ -4379,19 +4379,20 @@ def init_plugin(c):
     """Функция инициализации плагина"""
     global CARDINAL, RUNNING, AUTO_START
     CARDINAL = c
-
+    
     logger.info(f"{LOGGER_PREFIX} Плагин инициализируется...")
-
+    
     # Загружаем настройки
     load_config()
     load_lot_bindings()
-
+    
     try:
+        
         # Регистрация команд в Telegram
         c.add_telegram_commands(UUID, [
             ("srent_menu", "Меню аренды Steam", True),
         ])
-
+        
         # Регистрация обработчиков команд
         c.telegram.msg_handler(show_menu, commands=["srent_menu"])
         c.telegram.msg_handler(add_account_cmd, commands=["srent_add"])
@@ -4404,43 +4405,44 @@ def init_plugin(c):
         c.telegram.msg_handler(manual_rent_account_cmd, commands=["srent_manual"])
         c.telegram.msg_handler(return_account_cmd, commands=["srent_return"])
         c.telegram.msg_handler(del_account_cmd, commands=["srent_del"])
-
+        
         # Регистрация команд для привязки лотов
         c.telegram.msg_handler(unbind_lot_cmd, commands=["srent_unbind"])
         c.telegram.msg_handler(list_bindings_cmd, commands=["srent_bindings"])
         c.telegram.msg_handler(bind_lot_cmd, commands=["srent_bind"])
         c.telegram.msg_handler(help_lot_binding_cmd, commands=["srent_help"])
-
+        
         # Регистрация команд для управления шаблонами
         c.telegram.msg_handler(list_templates_cmd, commands=["templates", "srent_templates"])
         c.telegram.msg_handler(view_template_cmd, commands=["view_template"])
         c.telegram.msg_handler(edit_template_cmd, commands=["edit_template"])
         c.telegram.msg_handler(reset_templates_cmd, commands=["reset_templates"])
-
+        
         # Регистрация команды для установки admin_id
         c.telegram.msg_handler(set_admin_id_cmd, commands=["admin_id", "srent_admin"])
-
+        
         # Регистрация обработчика текстовых сообщений
         c.telegram.msg_handler(handle_account_add_steps_and_template_edit, content_types=["text"])
-
+        
         # Регистрация обработчика кнопки меню в клавиатуре
         c.telegram.msg_handler(show_menu, func=lambda message: message.text == "Меню💻" or message.text == "меню")
-
+        
         # Создаем клавиатуру с кнопкой меню
         try:
             menu_kb = ReplyKeyboardMarkup(resize_keyboard=True)
             menu_kb.add(KeyboardButton("Меню💻"))
-
+            
             # Получаем админ чаты из настроек кардинала или из нашей настройки
             admin_ids = []
             if admin_id:
                 admin_ids = [admin_id]
             elif hasattr(c, "MAIN_CFG") and "telegram" in c.MAIN_CFG and "admin_id" in c.MAIN_CFG["telegram"]:
                 admin_ids = [c.MAIN_CFG["telegram"]["admin_id"]]
-
+                
             # Отправляем клавиатуру с меню админам
             for chat_id in admin_ids:
                 try:
+                    # Отправляем админу сообщение с клавиатурой
                     c.telegram.bot.send_message(
                         chat_id,
                         "🎮 <b>Система аренды Steam готова к использованию</b>\n\n"
@@ -4452,7 +4454,7 @@ def init_plugin(c):
                     logger.error(f"{LOGGER_PREFIX} Ошибка отправки клавиатуры меню админу {chat_id}: {e}")
         except Exception as e:
             logger.error(f"{LOGGER_PREFIX} Ошибка создания клавиатуры меню: {e}")
-
+        
         # Обработчики кнопок
         @c.telegram.bot.callback_query_handler(func=lambda call: call.data.startswith("srent_"))
         def handle_button_press(call, *args, **kwargs):
@@ -4479,46 +4481,55 @@ def init_plugin(c):
                 elif call.data == "srent_cancel_add":
                     cancel_add_account_callback(call)
                     return
-
+                
                 # Особая обработка для привязок лотов
                 if call.data == "srent_lot_bindings":
                     show_lot_bindings_callback(call)
                     return
                 elif call.data.startswith("srent_binding_"):
+                    # Новый формат: srent_binding_HASH
                     binding_hash = call.data.replace("srent_binding_", "")
                     manage_binding_callback(call, binding_hash)
                     return
                 elif call.data == "srent_add_binding":
+                    # Здесь будет вызов функции для добавления привязки
                     start_add_binding_callback(call)
                     return
                 elif call.data == "srent_binding_help":
+                    # Вызываем функцию help_lot_binding_cmd с сообщением из call
                     help_lot_binding_callback(call)
                     return
                 elif call.data == "srent_all_bindings":
+                    # Здесь будет вызов функции для просмотра всех привязок
                     show_all_bindings_callback(call)
                     return
                 elif call.data == "srent_cancel_binding":
+                    # Обработка отмены добавления привязки
                     cancel_binding_callback(call)
                     return
                 elif call.data.startswith("srent_binding_duration_"):
+                    # Обработка выбора длительности привязки
                     binding_duration_callback(call)
                     return
                 elif call.data.startswith("srent_edit_binding_type_"):
+                    # Обработка изменения типа привязки
                     binding_hash = call.data.replace("srent_edit_binding_type_", "")
                     edit_binding_type_callback(call, binding_hash)
                     return
                 elif call.data.startswith("srent_edit_binding_time_"):
+                    # Обработка изменения времени привязки
                     binding_hash = call.data.replace("srent_edit_binding_time_", "")
                     edit_binding_time_callback(call, binding_hash)
                     return
                 elif call.data.startswith("srent_delete_binding_"):
+                    # Обработка удаления привязки
                     binding_hash = call.data.replace("srent_delete_binding_", "")
                     delete_binding_callback(call, binding_hash)
                     return
-
+                    
                 # Стандартная обработка по первой части callback data
                 action = call.data.split("_")[1] if len(call.data.split("_")) > 1 else ""
-
+                
                 if action == "menu":
                     show_menu_callback(call)
                 elif action == "start":
@@ -4534,6 +4545,7 @@ def init_plugin(c):
                 elif action == "add":
                     interactive_add_account_start_callback(call)
                 elif action == "delete" and len(call.data.split("_")) > 2:
+                    # Извлекаем логин аккаунта для удаления
                     login = call.data.split("_")[2]
                     delete_account_callback(call, login)
                 elif action == "return":
@@ -4551,16 +4563,16 @@ def init_plugin(c):
                     CARDINAL.telegram.bot.answer_callback_query(call.id, f"Ошибка: {str(e)[:50]}")
                 except:
                     pass
-
+        
         # Запускаем проверку истекших аренд в отдельном потоке
         check_thread = threading.Thread(target=check_rentals_thread, daemon=True)
         check_thread.start()
-
+        
         # Автозапуск системы аренды если включено
         if AUTO_START:
             RUNNING = True
             logger.info(f"{LOGGER_PREFIX} Система аренды запущена автоматически")
-
+        
         logger.info(f"{LOGGER_PREFIX} Плагин успешно инициализирован!")
         return True
     except Exception as e:
