@@ -12,7 +12,7 @@ import re
 import hashlib
 import base64
 import hmac
-import telebot.types
+import telebot.types 
 
 from license_manager import is_license_valid, activate_key
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
@@ -1900,6 +1900,10 @@ def handle_account_add_steps(message):
 def show_menu(message):
     """Показывает главное меню плагина"""
     try:
+        valid, msg = is_license_valid(message.chat.id)
+        if not valid:
+            CARDINAL.telegram.bot.send_message(message.chat.id, msg, parse_mode="HTML")
+            return 
         # Создаем клавиатуру с кнопками
         markup = InlineKeyboardMarkup(row_width=2)
         
@@ -4415,6 +4419,8 @@ def init_plugin(c):
         # Регистрация обработчика кнопки меню в клавиатуре
         c.telegram.msg_handler(show_menu, func=lambda message: message.text == "Меню💻" or message.text == "меню")
         
+        c.telegram.msg_handler(lambda msg: activate_key(msg, CARDINAL), commands=["activate"])
+
         # Создаем клавиатуру с кнопкой меню
         try:
             menu_kb = ReplyKeyboardMarkup(resize_keyboard=True)
