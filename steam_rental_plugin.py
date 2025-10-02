@@ -14,9 +14,6 @@ import base64
 import hmac
 import telebot.types 
 
-
-
-from license_manager import is_license_valid, activate_key
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 
 # Информация о плагине (обязательные поля)
