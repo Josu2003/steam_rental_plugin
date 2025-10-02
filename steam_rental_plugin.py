@@ -13,6 +13,7 @@ import hashlib
 import base64
 import hmac
 import telebot.types 
+import traceback
 
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 
@@ -56,92 +57,143 @@ binding_hash_map = {}  # Сопоставление хешей с именами
 
 KEYS_URL = "https://raw.githubusercontent.com/Josu2003/steam_rental_plugin/refs/heads/main/license.json"
 
-# Папка для хранения локальных данных (где лежит сам плагин)
+# Папка для хранения локальных данных (где лежит плагин)
 DATA_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# URL с базой ключей на GitHub
+KEYS_URL = "https://raw.githubusercontent.com/Josu2003/steam_rental_plugin/refs/heads/main/license.json"
+
+# ---------------- Безопасная отправка сообщений ----------------
+def safe_send(chat_id, text, CARDINAL):
+    """Отправка сообщений пользователю с fallback."""
+    try:
+        if getattr(CARDINAL, "telegram", None) and getattr(CARDINAL.telegram, "bot", None):
+            CARDINAL.telegram.bot.send_message(chat_id, text)
+        elif hasattr(CARDINAL, "send_message"):
+            CARDINAL.send_message(chat_id, text)
+        else:
+            print(f"DEBUG: Нет метода отправки сообщений. Text: {text}")
+    except Exception as e:
+        print(f"DEBUG: ошибка при отправке сообщения: {e}")
+
+# ---------------- Работа с локальными ключами ----------------
+def load_all_user_keys():
+    """Загружает все локальные ключи"""
+    license_file = os.path.join(DATA_DIR, "license.json")
+    if not os.path.exists(license_file):
+        return {}
+    try:
+        with open(license_file, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"DEBUG: не удалось прочитать license.json: {e}")
+        return {}
+
+def save_user_key(user_id, key):
+    """Сохраняет ключ конкретного пользователя"""
+    all_keys = load_all_user_keys()
+    all_keys[str(user_id)] = key
+    license_file = os.path.join(DATA_DIR, "license.json")
+    try:
+        with open(license_file, "w", encoding="utf-8") as f:
+            json.dump(all_keys, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"DEBUG: не удалось сохранить license.json: {e}")
+
+def get_user_key(user_id):
+    """Возвращает ключ пользователя"""
+    all_keys = load_all_user_keys()
+    return all_keys.get(str(user_id))
+
+# ---------------- Работа с удалённой базой ключей ----------------
 def fetch_keys():
     """Загружает базу ключей с GitHub"""
     try:
         response = requests.get(KEYS_URL, timeout=10)
-        if response.status_code == 200:
-            return response.json()
-        else:
-            return {}
-    except Exception:
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        print(f"DEBUG: ошибка при загрузке KEYS_URL: {e}")
         return {}
 
-def save_user_key(user_id, key):
-    """Сохраняет локально ключ"""
-    license_file = os.path.join(DATA_DIR, "license.json")
-    data = {"user_id": user_id, "key": key}
-    with open(license_file, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-
-def load_user_key():
-    """Загружает локальный ключ"""
-    license_file = os.path.join(DATA_DIR, "license.json")
-    if not os.path.exists(license_file):
-        return None
-    with open(license_file, "r", encoding="utf-8") as f:
-        return json.load(f)
-
+# ---------------- Проверка валидности лицензии ----------------
 def is_license_valid(user_id):
     """Проверяет валидность ключа"""
-    license_data = load_user_key()
-    if not license_data:
-        return False, "❌ Нет активированного ключа. Используй /activate XXXX-XXXX-XXXX-XXXX\n\n" + \
-    "Преобрести ключ можно тут @xx00xxdanu\n"
+    key = get_user_key(user_id)
+    if not key:
+        return False, "❌ Нет активированного ключа. Используй /activate XXXX-XXXX-XXXX-XXXX\nПреобрести ключ можно тут @xx00xxdanu"
 
-    key = license_data.get("key")
     keys = fetch_keys()
-
     if key not in keys:
-        return False, "❌ Ключ не найден\n\n" + \
-                      "Преобрести ключ можно тут @xx00xxdanu\n"
+        return False, "❌ Ключ не найден\nПреобрести ключ можно тут @xx00xxdanu"
 
     key_data = keys[key]
-    expires_at = datetime.fromisoformat(key_data["expires_at"])
-    if datetime.now() > expires_at:
-        return False, "⏰ Срок действия ключа истёк\n\n" + \
-                      "Преобрести ключ можно тут @xx00xxdanu\n"
+    try:
+        expires_at = datetime.fromisoformat(key_data["expires_at"])
+    except Exception as e:
+        print(f"DEBUG: ошибка парсинга даты истечения: {e}")
+        return False, "❌ Невозможно проверить срок действия ключа"
 
-    if key_data["user_id"] and key_data["user_id"] != user_id:
-        return False, "🔒 Ключ активирован другим пользователем\n\n" + \
-                      "Преобрести ключ можно тут @xx00xxdanu\n"
+    if datetime.now() > expires_at:
+        return False, "⏰ Срок действия ключа истёк\nПреобрести ключ можно тут @xx00xxdanu"
+
+    if key_data.get("user_id") and key_data["user_id"] != user_id:
+        return False, "🔒 Ключ активирован другим пользователем\nПреобрести ключ можно тут @xx00xxdanu"
 
     return True, "✅ Лицензия активна"
 
+# ---------------- Активация ключа ----------------
 def activate_key(message, CARDINAL):
     """Активация ключа через /activate"""
-    parts = message.text.strip().split(" ")
-    if len(parts) < 2:
-        CARDINAL.telegram.bot.send_message(message.chat.id, "⚠️ Используй: /activate XXXX-XXXX-XXXX-XXXX\n\n" + \
-                                                            "Преобрести ключ можно тут @xx00xxdanu\n")
-        return
+    try:
+        parts = (message.text or "").strip().split(" ")
+        if len(parts) < 2:
+            safe_send(message.chat.id,
+                      "⚠️ Используй: /activate XXXX-XXXX-XXXX-XXXX\nПреобрести ключ можно тут @xx00xxdanu",
+                      CARDINAL)
+            return
 
-    key = parts[1].strip()
-    keys = fetch_keys()
+        key = parts[1].strip()
+        keys = fetch_keys()
+        if key not in keys:
+            safe_send(message.chat.id,
+                      "❌ Ключ не найден\nПреобрести ключ можно тут @xx00xxdanu",
+                      CARDINAL)
+            return
 
-    if key not in keys:
-        CARDINAL.telegram.bot.send_message(message.chat.id, "❌ Ключ не найден\n\n" + \
-                                                            "Преобрести ключ можно тут @xx00xxdanu\n")
-        return
+        key_data = keys[key]
+        try:
+            expires_at = datetime.fromisoformat(key_data["expires_at"])
+        except Exception:
+            safe_send(message.chat.id,
+                      "❌ Невозможно проверить срок действия ключа",
+                      CARDINAL)
+            return
 
-    key_data = keys[key]
-    expires_at = datetime.fromisoformat(key_data["expires_at"])
-    if datetime.now() > expires_at:
-        CARDINAL.telegram.bot.send_message(message.chat.id, "⏰ Срок действия ключа истёк\n\n" + \
-                                                            "Преобрести ключ можно тут @xx00xxdanu\n")
-        return
+        if datetime.now() > expires_at:
+            safe_send(message.chat.id,
+                      "⏰ Срок действия ключа истёк\nПреобрести ключ можно тут @xx00xxdanu",
+                      CARDINAL)
+            return
 
-    if key_data["user_id"] and key_data["user_id"] != message.chat.id:
-        CARDINAL.telegram.bot.send_message(message.chat.id, "🔒 Ключ уже используется другим пользователем\n\n" + \
-                                                            "Преобрести ключ можно тут @xx00xxdanu\n")
-        return
+        if key_data.get("user_id") and key_data["user_id"] != message.chat.id:
+            safe_send(message.chat.id,
+                      "🔒 Ключ уже используется другим пользователем\nПреобрести ключ можно тут @xx00xxdanu",
+                      CARDINAL)
+            return
 
-    # сохраняем локально
-    save_user_key(message.chat.id, key)
-    CARDINAL.telegram.bot.send_message(message.chat.id, "✅ Ключ активирован. Теперь можно использовать /srent_menu")
+        # сохраняем локально
+        save_user_key(message.chat.id, key)
+        safe_send(message.chat.id, "✅ Ключ активирован. Теперь можно использовать /srent_menu", CARDINAL)
+        print(f"INFO: ключ {key} активирован для пользователя {message.chat.id}")
+
+    except Exception as e:
+        print("UNHANDLED in activate_key:", e)
+        traceback.print_exc()
+        try:
+            safe_send(message.chat.id, "❌ Внутренняя ошибка при активации ключа. Смотри логи.", CARDINAL)
+        except:
+            pass
 
 # Стандартные шаблоны сообщений
 DEFAULT_TEMPLATES = {
