@@ -89,13 +89,15 @@ def is_license_valid(user_id):
     """Проверяет валидность ключа"""
     license_data = load_user_key()
     if not license_data:
-        return False, "❌ Нет активированного ключа. Используй /activate XXXX-XXXX-XXXX-XXXX"
+        return False, "❌ Нет активированного ключа. Используй /activate XXXX-XXXX-XXXX-XXXX\n"
+    "Преобрести ключ можно тут @xx00xxdanu"
 
     key = license_data.get("key")
     keys = fetch_keys()
 
     if key not in keys:
-        return False, "❌ Ключ не найден"
+        return False, "❌ Ключ не найден\n"
+    "Преобрести ключ можно тут @xx00xxdanu"
 
     key_data = keys[key]
     expires_at = datetime.fromisoformat(key_data["expires_at"])
