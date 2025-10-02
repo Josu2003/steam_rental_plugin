@@ -54,7 +54,7 @@ message_templates = {}  # template_name -> template_text
 admin_id = None  # ID администратора
 binding_hash_map = {}  # Сопоставление хешей с именами лотов
 
-KEYS_URL = "https://raw.githubusercontent.com/Josu2003/steam_rental_plugin/refs/heads/main/Users_Keys.json"
+KEYS_URL = "https://raw.githubusercontent.com/Josu2003/steam_rental_plugin/refs/heads/main/license.json"
 
 # Папка для хранения локальных данных (где лежит сам плагин)
 DATA_DIR = os.path.dirname(os.path.abspath(__file__))
