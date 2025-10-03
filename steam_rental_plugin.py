@@ -4543,6 +4543,23 @@ def init_plugin(c):
     # Загружаем настройки
     load_config()
     load_lot_bindings()
+
+     # ---------------- ВРЕМЕННЫЙ ТЕСТ: УДАЛИТЬ ПОСЛЕ УСПЕХА! ----------------
+    # Принудительно вызываем activate_key при запуске плагина
+    class FakeMessage:
+        def __init__(self, text, chat_id):
+            self.text = text
+            self.chat = type('Chat', (object,), {'id': chat_id}) 
+
+    print("!!! ПРОВЕРКА: Вызываю activate_key напрямую с ключом H7C4-IK3I-FMEQ-JHP4 !!!")
+    # Используйте ваш реальный chat_id, чтобы получить ответ в Telegram!
+    # Если не знаете, используйте 1, но тогда ответ будет только в консоли.
+    TEST_CHAT_ID = 1 # <--- МОЖЕТЕ ВВЕСТИ СЮДА СВОЙ ID
+    test_message = FakeMessage(text="/activate H7C4-IK3I-FMEQ-JHP4", chat_id=TEST_CHAT_ID)
+    activate_key(test_message, CARDINAL)
+    print("!!! ПРОВЕРКА: Вызов activate_key завершен !!!")
+    # ---------------- КОНЕЦ ВРЕМЕННОГО ТЕСТА ----------------
+    
     
     try:
         
