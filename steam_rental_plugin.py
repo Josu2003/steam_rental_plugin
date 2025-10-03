@@ -123,7 +123,7 @@ def get_user_key(user_id):
         return None
 # ---------------- Работа с удалённой базой ключей ----------------
 def fetch_keys():
-    """Загружает базу ключей с GitHub"""
+    """Загружает базу ключей"""
     print(f"DEBUG FETCH: Начинаю загрузку ключей с {KEYS_URL}") # <-- НОВЫЙ ЛОГ
     try:
         import requests
@@ -164,76 +164,89 @@ def is_license_valid(user_id):
 
     return True, "✅ Лицензия активна"
 
-def activate_key(message, CARDINAL):
+# ---------------- Активация ключа ----------------
+def activate_key(message, CARDINAL): 
     """Активация ключа через /activate"""
-    print(f"DEBUG ACTIVATE: Начало обработки команды для пользователя {message.chat.id}") 
+    user_id = message.chat.id
+    # Используем message.chat.username для Telegram, fallback на ID для FunPay
+    username = getattr(message.chat, 'username', None) or str(user_id) 
+    
+    print(f"DEBUG ACTIVATE: Начало обработки команды для пользователя {user_id}") 
 
     try:
+        import requests # Убедимся, что requests импортирован
+        
         parts = (message.text or "").strip().split(" ")
         if len(parts) < 2:
             print("DEBUG ACTIVATE: Нет ключа в команде. Отправляю ошибку.")
-            safe_send(message.chat.id,
-                      "⚠️ Используй: /activate XXXX-XXXX-XXXX-XXXX\nПреобрести ключ можно тут @xx00xxdanu",
-                      CARDINAL)
+            safe_send(user_id, "⚠️ Используй: /activate XXXX-XXXX-XXXX-XXXX\nПреобрести ключ можно тут @xx00xxdanu", CARDINAL)
             return
 
-        key = parts[1].strip()
+        key = parts[1].strip().upper() # Ключ должен быть в верхнем регистре
         
+        # 1. ПРОВЕРКА: Загружаем текущую базу ключей (GET-запрос)
         print(f"DEBUG ACTIVATE: Ключ получен: {key}. Пытаюсь загрузить базу...")
+        keys = fetch_keys()
         
-        keys = fetch_keys() # Здесь загружается база с GitHub
-        
-        print(f"DEBUG ACTIVATE: База загружена. Ключей в базе: {len(keys)}")
-
         if key not in keys:
             print("DEBUG ACTIVATE: Ключ не найден. Отправляю ошибку.")
-            safe_send(message.chat.id,
-                      "❌ Ключ не найден\nПреобрести ключ можно тут @xx00xxdanu",
-                      CARDINAL)
+            safe_send(user_id, "❌ Ключ не найден\nПреобрести ключ можно тут @xx00xxdanu", CARDINAL)
             return
 
         key_data = keys[key]
+        
+        # --- ПРОВЕРКИ (срок, занятость) ---
         try:
-            # Преобразование строки даты в объект datetime
-            expires_at = datetime.fromisoformat(key_data["expires_at"]) 
+            from datetime import datetime
+            expires_at = datetime.fromisoformat(key_data["expires_at"])
         except Exception:
-            print("DEBUG ACTIVATE: Ошибка парсинга даты. Отправляю ошибку.")
-            safe_send(message.chat.id,
-                      "❌ Невозможно проверить срок действия ключа",
-                      CARDINAL)
+            safe_send(user_id, "❌ Невозможно проверить срок действия ключа", CARDINAL)
             return
 
         if datetime.now() > expires_at:
-            print("DEBUG ACTIVATE: Срок действия истек. Отправляю ошибку.")
-            safe_send(message.chat.id,
-                      "⏰ Срок действия ключа истёк\nПреобрести ключ можно тут @xx00xxdanu",
-                      CARDINAL)
+            safe_send(user_id, "⏰ Срок действия ключа истёк\nПреобрести ключ можно тут @xx00xxdanu", CARDINAL)
             return
+            
+        current_status = key_data.get("status")
+        current_user_id = str(key_data.get("user_id")) # Сравниваем со строкой
         
-        user_id = message.chat.id
-        if key_data.get("user_id") and key_data["user_id"] != user_id:
-            # УСЛОВИЕ ДЛЯ ВАШЕГО КЛЮЧА
+        if current_status == "active" and current_user_id and current_user_id != str(user_id):
             print("DEBUG ACTIVATE: Ключ занят. Отправляю ошибку.") 
-            safe_send(user_id,
-                      "🔒 Ключ уже используется другим пользователем\nПреобрести ключ можно тут @xx00xxdanu",
-                      CARDINAL)
+            safe_send(user_id, "🔒 Ключ уже используется другим пользователем\nПреобрести ключ можно тут @xx00xxdanu", CARDINAL)
+            return
+            
+        if current_status == "active" and current_user_id == str(user_id):
+            safe_send(user_id, "✅ Ключ уже активирован вами. Теперь можно использовать /srent_menu", CARDINAL)
             return
 
-        # --- КЛЮЧ УСПЕШНО ПРОШЕЛ ПРОВЕРКУ ---
+        # 2. АКТИВАЦИЯ: POST-запрос на Google Apps Script для записи в таблицу
+        print(f"DEBUG ACTIVATE: Отправляю POST-запрос на активацию ключа {key}...")
         
-        # 1. Сохраняем ключ локально
-        save_user_key(user_id, key)
+        post_data = {
+            "key": key,
+            "user_id": user_id,
+            "username": username
+        }
         
-        # 2. Отправка подтверждения
+        post_response = requests.post(KEYS_URL, json=post_data, timeout=30)
+        post_response.raise_for_status()
+        
+        post_result = post_response.json()
+        if not post_result.get("success"):
+             raise Exception(f"Apps Script Error: {post_result.get('error', 'Unknown activation error')}")
+        
+        # 3. ФИНАЛИЗАЦИЯ
+        save_user_key(user_id, key) # сохраняем ключ локально
         print("DEBUG ACTIVATE: Ключ активирован. Отправляю подтверждение.")
         safe_send(user_id, "✅ Ключ активирован. Теперь можно использовать /srent_menu", CARDINAL)
         print(f"INFO: ключ {key} активирован для пользователя {user_id}")
 
     except Exception as e:
+        import traceback
         print("DEBUG ACTIVATE: UNHANDLED in activate_key:", e)
         traceback.print_exc()
         try:
-            safe_send(message.chat.id, "❌ Внутренняя ошибка при активации ключа. Смотри логи.", CARDINAL)
+            safe_send(user_id, f"❌ Внутренняя ошибка при активации ключа: {e}", CARDINAL)
         except:
             pass
 
