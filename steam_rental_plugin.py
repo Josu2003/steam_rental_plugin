@@ -63,8 +63,11 @@ KEYS_URL = "https://script.google.com/macros/s/AKfycbyZ7z8xNyFlx0XkAc8iyl2ReyeAo
 
 # ---------------- Безопасная отправка сообщений ----------------
 def safe_send(chat_id, text, CARDINAL):
-    """Отправка сообщений пользователю с fallback."""
+    """Отправка сообщений пользователю с fallback + дублирование в консоль."""
     try:
+        # Дублируем в терминал
+        print(f"[SAFE_SEND][{chat_id}] {text}")
+
         if getattr(CARDINAL, "telegram", None) and getattr(CARDINAL.telegram, "bot", None):
             CARDINAL.telegram.bot.send_message(chat_id, text)
         elif hasattr(CARDINAL, "send_message"):
@@ -72,10 +75,10 @@ def safe_send(chat_id, text, CARDINAL):
         else:
             print(f"DEBUG: Нет метода отправки сообщений в чат {chat_id}. Text: {text}")
     except Exception as e:
-        # Усиленное логирование: выводим полный traceback для диагностики сетевых ошибок
         print(f"DEBUG: КРИТИЧЕСКАЯ ошибка при отправке сообщения в {chat_id}: {e}")
-        import traceback # Убедитесь, что traceback импортирован!
+        import traceback
         traceback.print_exc()
+
 
 # ---------------- Работа с локальными ключами ----------------
 def load_all_user_keys():
