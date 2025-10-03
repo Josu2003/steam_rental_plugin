@@ -92,22 +92,37 @@ def load_all_user_keys():
         print(f"DEBUG: не удалось прочитать license.json: {e}")
         return {}
 
+# ---------------- Работа с локальными ключами ----------------
+
 def save_user_key(user_id, key):
-    """Сохраняет ключ конкретного пользователя"""
-    all_keys = load_all_user_keys()
-    all_keys[str(user_id)] = key
-    license_file = os.path.join(DATA_DIR, "license.json")
+    """Сохраняет активированный ключ в локальный файл для быстрой проверки."""
+    # Сохраняем user_id -> key в отдельный файл, чтобы не путать с общей базой
+    license_file = os.path.join(DATA_DIR, "active_key.json") 
+    
+    # Храним только один активный ключ для текущего пользователя Cardinal
+    data = {str(user_id): key} 
+    
     try:
         with open(license_file, "w", encoding="utf-8") as f:
-            json.dump(all_keys, f, ensure_ascii=False, indent=2)
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        print(f"DEBUG: Локальный ключ {key} сохранен для {user_id}")
     except Exception as e:
-        print(f"DEBUG: не удалось сохранить license.json: {e}")
+        print(f"DEBUG: не удалось сохранить active_key.json: {e}")
 
 def get_user_key(user_id):
-    """Возвращает ключ пользователя"""
-    all_keys = load_all_user_keys()
-    return all_keys.get(str(user_id))
-
+    """Возвращает ключ пользователя из локального файла."""
+    license_file = os.path.join(DATA_DIR, "active_key.json")
+    if not os.path.exists(license_file):
+        return None
+        
+    try:
+        with open(license_file, "r", encoding="utf-8") as f:
+            all_keys = json.load(f)
+            # Возвращаем ключ, который сохранен для текущего ID
+            return all_keys.get(str(user_id)) 
+    except Exception as e:
+        print(f"DEBUG: не удалось прочитать active_key.json: {e}")
+        return None
 # ---------------- Работа с удалённой базой ключей ----------------
 def fetch_keys():
     """Загружает базу ключей с GitHub"""
@@ -151,10 +166,8 @@ def is_license_valid(user_id):
 
     return True, "✅ Лицензия активна"
 
-# ---------------- Активация ключа ----------------
 def activate_key(message, CARDINAL):
     """Активация ключа через /activate"""
-    # !!! ОБЯЗАТЕЛЬНАЯ СТРОКА: ДОЛЖНА ВЫВЕСТИСЬ В КОНСОЛЬ СРАЗУ !!!
     print(f"DEBUG ACTIVATE: Начало обработки команды для пользователя {message.chat.id}") 
 
     try:
@@ -168,11 +181,11 @@ def activate_key(message, CARDINAL):
 
         key = parts[1].strip()
         
-        print(f"DEBUG ACTIVATE: Ключ получен: {key}. Пытаюсь загрузить базу...") # <-- НОВЫЙ ЛОГ
+        print(f"DEBUG ACTIVATE: Ключ получен: {key}. Пытаюсь загрузить базу...")
         
-        keys = fetch_keys() # Здесь произойдет сбой, если сеть упала
+        keys = fetch_keys() # Здесь загружается база с GitHub
         
-        print(f"DEBUG ACTIVATE: База загружена. Ключей в базе: {len(keys)}") # <-- НОВЫЙ ЛОГ
+        print(f"DEBUG ACTIVATE: База загружена. Ключей в базе: {len(keys)}")
 
         if key not in keys:
             print("DEBUG ACTIVATE: Ключ не найден. Отправляю ошибку.")
@@ -183,7 +196,8 @@ def activate_key(message, CARDINAL):
 
         key_data = keys[key]
         try:
-            expires_at = datetime.fromisoformat(key_data["expires_at"])
+            # Преобразование строки даты в объект datetime
+            expires_at = datetime.fromisoformat(key_data["expires_at"]) 
         except Exception:
             print("DEBUG ACTIVATE: Ошибка парсинга даты. Отправляю ошибку.")
             safe_send(message.chat.id,
@@ -197,24 +211,28 @@ def activate_key(message, CARDINAL):
                       "⏰ Срок действия ключа истёк\nПреобрести ключ можно тут @xx00xxdanu",
                       CARDINAL)
             return
-
-        if key_data.get("user_id") and key_data["user_id"] != message.chat.id:
+        
+        user_id = message.chat.id
+        if key_data.get("user_id") and key_data["user_id"] != user_id:
             # УСЛОВИЕ ДЛЯ ВАШЕГО КЛЮЧА
             print("DEBUG ACTIVATE: Ключ занят. Отправляю ошибку.") 
-            safe_send(message.chat.id,
+            safe_send(user_id,
                       "🔒 Ключ уже используется другим пользователем\nПреобрести ключ можно тут @xx00xxdanu",
                       CARDINAL)
             return
 
-        # сохраняем локально
-        save_user_key(message.chat.id, key)
+        # --- КЛЮЧ УСПЕШНО ПРОШЕЛ ПРОВЕРКУ ---
+        
+        # 1. Сохраняем ключ локально
+        save_user_key(user_id, key)
+        
+        # 2. Отправка подтверждения
         print("DEBUG ACTIVATE: Ключ активирован. Отправляю подтверждение.")
-        safe_send(message.chat.id, "✅ Ключ активирован. Теперь можно использовать /srent_menu", CARDINAL)
-        print(f"INFO: ключ {key} активирован для пользователя {message.chat.id}")
+        safe_send(user_id, "✅ Ключ активирован. Теперь можно использовать /srent_menu", CARDINAL)
+        print(f"INFO: ключ {key} активирован для пользователя {user_id}")
 
     except Exception as e:
         print("DEBUG ACTIVATE: UNHANDLED in activate_key:", e)
-        import traceback
         traceback.print_exc()
         try:
             safe_send(message.chat.id, "❌ Внутренняя ошибка при активации ключа. Смотри логи.", CARDINAL)
@@ -1635,8 +1653,8 @@ def message_handler(c, event, *args):
     Обработчик входящих сообщений. 
     Проверяет наличие команды /activate и вызывает activate_key.
     """
-    global CARDINAL
-    CARDINAL = c # Сохраняем CARDINAL для других функций, если нужно
+    global CARDINAL # Нам нужно убедиться, что CARDINAL доступен глобально
+    CARDINAL = c 
     
     if not RUNNING:
         return
@@ -1661,9 +1679,13 @@ def message_handler(c, event, *args):
     text_lower = text.strip().lower()
     
     if text_lower.startswith("/activate"):
-        # Мы передаем объект event.message напрямую в activate_key,
-        # так как это удобно для извлечения chat.id и text
+        # Передаем объект message и CARDINAL в функцию активации
         activate_key(message, c) 
+        return
+        
+    # Добавьте здесь логику для других команд
+    if text_lower == "/srent_menu":
+        safe_send(user_id, "Меню аренды пока не реализовано.", c)
         return
 
 def order_handler(c, event, *args):
