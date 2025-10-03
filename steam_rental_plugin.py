@@ -59,10 +59,10 @@ binding_hash_map = {}  # Сопоставление хешей с именами
 DATA_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # URL с базой ключей
-KEYS_URL = "https://script.google.com/macros/s/AKfycbzs5-9JlO8w0XUoJAfYVW8x9Ipab-tPB7Eqg4jOwePxkrnLebPfzFjV6-AeQdhn9ZQFWA/exec"
+KEYS_URL = "hhttps://script.google.com/macros/s/AKfycbzs5-9JlO8w0XUoJAfYVW8x9Ipab-tPB7Eqg4jOwePxkrnLebPfzFjV6-AeQdhn9ZQFWA/exec"
 
 # ---------------- Безопасная отправка сообщений ----------------
-def safe_send(chat_id, text, CARDINAL):
+def safe_send(chat_id: int, text: str, CARDINAL) -> None:
     """Отправка сообщений пользователю с дублированием в консоль."""
     try:
         # всегда показываем в терминале
