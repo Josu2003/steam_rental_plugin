@@ -59,7 +59,7 @@ binding_hash_map = {}  # Сопоставление хешей с именами
 DATA_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # URL с базой ключей
-KEYS_URL = "https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLhd0JDZyrEotnx-BiHyXSy_tE9W8B1fbqlEm0OMubb9UoE67T5a3QiTUCMl4wGrveEcj9YRpBiiTdYPV3CSV4GbQ-4rGmN4_C4ML0P5k9IJ68uOksbtM5xo3rRcUL24zm6hAHaajOQUWeln1bvKVbZ5_irLmINte3h1DmT4Gj0PXYzbeqsKK7q44mQPZYLQTIbIKm-ew8oF9xOh-iup6b0rl8XMm_oDnMCyCy3XM5Lr7uUSZLwU_FfkGuTUfxDWGNSVcco51jIv8OIbdxqPP4pKm5ZTDMyM3wkVUswP&lib=M79HuteXMZVdUxXoAcGkLMpYlpkPzGLrX"
+KEYS_URL = "https://script.google.com/macros/s/AKfycbzs5-9JlO8w0XUoJAfYVW8x9Ipab-tPB7Eqg4jOwePxkrnLebPfzFjV6-AeQdhn9ZQFWA/exec"
 
 # ---------------- Безопасная отправка сообщений ----------------
 def safe_send(chat_id, text, CARDINAL):
