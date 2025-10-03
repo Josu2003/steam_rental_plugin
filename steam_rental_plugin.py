@@ -59,7 +59,7 @@ binding_hash_map = {}  # Сопоставление хешей с именами
 DATA_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # URL с базой ключей
-KEYS_URL = "https://script.google.com/macros/s/AKfycbwuD8KhmaUCmENonJTd5zqETOt9wYVBS-RMhyIIDO0sBBrSejBxJ5G16Q-Ec-HILdNqnw/exec"
+KEYS_URL = "https://script.google.com/macros/s/AKfycbyZ7z8xNyFlx0XkAc8iyl2ReyeAoPHoA9OgI7S4aDnV7z49RhQOWxx1-fvkUeCHmBp2qQ/exec"
 
 # ---------------- Безопасная отправка сообщений ----------------
 def safe_send(chat_id, text, CARDINAL):
@@ -174,7 +174,9 @@ def activate_key(message, CARDINAL):
     print(f"DEBUG ACTIVATE: Начало обработки команды для пользователя {user_id}") 
 
     try:
-        import requests # Убедимся, что requests импортирован
+        import requests 
+        # Не забудьте импортировать datetime в начале файла, если его там нет
+        from datetime import datetime
         
         parts = (message.text or "").strip().split(" ")
         if len(parts) < 2:
@@ -188,6 +190,9 @@ def activate_key(message, CARDINAL):
         print(f"DEBUG ACTIVATE: Ключ получен: {key}. Пытаюсь загрузить базу...")
         keys = fetch_keys()
         
+        # 🔴 Добавлено логирование базы
+        print(f"DEBUG ACTIVATE: Ключей загружено: {len(keys)}. Ключ в базе: {key in keys}")
+
         if key not in keys:
             print("DEBUG ACTIVATE: Ключ не найден. Отправляю ошибку.")
             safe_send(user_id, "❌ Ключ не найден\nПреобрести ключ можно тут @xx00xxdanu", CARDINAL)
@@ -197,13 +202,14 @@ def activate_key(message, CARDINAL):
         
         # --- ПРОВЕРКИ (срок, занятость) ---
         try:
-            from datetime import datetime
             expires_at = datetime.fromisoformat(key_data["expires_at"])
         except Exception:
+            print("DEBUG ACTIVATE: Ошибка парсинга даты.")
             safe_send(user_id, "❌ Невозможно проверить срок действия ключа", CARDINAL)
             return
 
         if datetime.now() > expires_at:
+            print("DEBUG ACTIVATE: Срок действия истек.")
             safe_send(user_id, "⏰ Срок действия ключа истёк\nПреобрести ключ можно тут @xx00xxdanu", CARDINAL)
             return
             
@@ -211,11 +217,12 @@ def activate_key(message, CARDINAL):
         current_user_id = str(key_data.get("user_id")) # Сравниваем со строкой
         
         if current_status == "active" and current_user_id and current_user_id != str(user_id):
-            print("DEBUG ACTIVATE: Ключ занят. Отправляю ошибку.") 
+            print("DEBUG ACTIVATE: Ключ занят другим пользователем.") 
             safe_send(user_id, "🔒 Ключ уже используется другим пользователем\nПреобрести ключ можно тут @xx00xxdanu", CARDINAL)
             return
             
         if current_status == "active" and current_user_id == str(user_id):
+            print("DEBUG ACTIVATE: Ключ уже активирован текущим пользователем.")
             safe_send(user_id, "✅ Ключ уже активирован вами. Теперь можно использовать /srent_menu", CARDINAL)
             return
 
@@ -232,6 +239,10 @@ def activate_key(message, CARDINAL):
         post_response.raise_for_status()
         
         post_result = post_response.json()
+
+        # 🔴 Добавлено логирование POST-ответа
+        print(f"DEBUG ACTIVATE: Ответ POST: {post_result}") 
+        
         if not post_result.get("success"):
              raise Exception(f"Apps Script Error: {post_result.get('error', 'Unknown activation error')}")
         
@@ -243,10 +254,10 @@ def activate_key(message, CARDINAL):
 
     except Exception as e:
         import traceback
-        print("DEBUG ACTIVATE: UNHANDLED in activate_key:", e)
+        print(f"DEBUG ACTIVATE: КРИТИЧЕСКАЯ UNHANDLED ERROR: {e}")
         traceback.print_exc()
         try:
-            safe_send(user_id, f"❌ Внутренняя ошибка при активации ключа: {e}", CARDINAL)
+            safe_send(user_id, "❌ Внутренняя ошибка при активации ключа. Проверьте логи.", CARDINAL)
         except:
             pass
 
