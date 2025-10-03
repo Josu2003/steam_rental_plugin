@@ -114,7 +114,7 @@ def fetch_keys():
     print(f"DEBUG FETCH: Начинаю загрузку ключей с {KEYS_URL}") # <-- НОВЫЙ ЛОГ
     try:
         import requests
-        response = requests.get(KEYS_URL, timeout=10)
+        response = requests.get(KEYS_URL, timeout=30)
         response.raise_for_status() 
         
         print("DEBUG FETCH: Ключи успешно загружены.") # <-- НОВЫЙ ЛОГ
