@@ -14,7 +14,6 @@ import base64
 import hmac
 import telebot.types 
 import traceback
-import sys
 
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 
@@ -29,21 +28,6 @@ SETTINGS_PAGE = False
 # Настройка логгера
 logger = logging.getLogger("FPC.Steam_Rental")
 LOGGER_PREFIX = "[Steam_Rental]"
-
-# --- ДОБАВЬТЕ ЭТОТ БЛОК ---
-# 1. Создаем консольный обработчик
-ch = logging.StreamHandler(sys.stdout)
-# 2. Устанавливаем минимальный уровень: DEBUG
-ch.setLevel(logging.DEBUG) 
-# 3. Применяем формат (по желанию)
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s - %(message)s')
-ch.setFormatter(formatter)
-# 4. Добавляем обработчик к логгеру плагина
-if not logger.handlers: # Проверяем, чтобы не добавить несколько раз
-    logger.addHandler(ch)
-# 5. Устанавливаем уровень самого логгера
-logger.setLevel(logging.DEBUG)
-# ---------------------------
 
 # Глобальные константы
 DATA_DIR = os.path.join("data", "steam_rental")
@@ -142,15 +126,21 @@ def fetch_keys():
     """Отправляет GET-запрос в Google Apps Script и возвращает словарь ключей."""
     try:
         import requests
+        import traceback # Импортируем traceback для полного отчета
         # Используем глобальную константу KEYS_URL
         print("DEBUG FETCH: Отправляю GET-запрос для получения ключей...")
-        response = requests.get(KEYS_URL, timeout=30)
-        response.raise_for_status() # Вызовет исключение при 4xx/5xx ошибке (важно!)
+        
+        # Устанавливаем таймаут 10 секунд, чтобы не ждать долго
+        response = requests.get(KEYS_URL, timeout=10) 
+        
+        response.raise_for_status() # Вызовет исключение при 4xx/5xx ошибке
         keys = response.json()
         print(f"DEBUG FETCH: Успешно загружено {len(keys)} ключей.")
         return keys
     except Exception as e:
-        print(f"DEBUG FETCH: Ошибка при получении ключей: {e}")
+        # Теперь мы выводим полный отчет об ошибке, включая тип сбоя (Timeout, Proxy, DNS и т.д.)
+        print(f"DEBUG FETCH: КРИТИЧЕСКАЯ ОШИБКА ПРИ ПОЛУЧЕНИИ КЛЮЧЕЙ: {e}")
+        traceback.print_exc()
         # Если не удалось получить, возвращаем пустой словарь, чтобы не крашить логику
         return {}
 
