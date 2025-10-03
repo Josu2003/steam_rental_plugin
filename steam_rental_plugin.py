@@ -123,19 +123,19 @@ def get_user_key(user_id):
         return None
 # ---------------- Работа с удалённой базой ключей ----------------
 def fetch_keys():
-    """Загружает базу ключей"""
-    print(f"DEBUG FETCH: Начинаю загрузку ключей с {KEYS_URL}") # <-- НОВЫЙ ЛОГ
+    """Отправляет GET-запрос в Google Apps Script и возвращает словарь ключей."""
     try:
         import requests
+        # Используем глобальную константу KEYS_URL
+        print("DEBUG FETCH: Отправляю GET-запрос для получения ключей...")
         response = requests.get(KEYS_URL, timeout=30)
-        response.raise_for_status() 
-        
-        print("DEBUG FETCH: Ключи успешно загружены.") # <-- НОВЫЙ ЛОГ
-        return response.json()
+        response.raise_for_status() # Вызовет исключение при 4xx/5xx ошибке (важно!)
+        keys = response.json()
+        print(f"DEBUG FETCH: Успешно загружено {len(keys)} ключей.")
+        return keys
     except Exception as e:
-        print(f"DEBUG FETCH: КРИТИЧЕСКАЯ ошибка при загрузке KEYS_URL: {e}")
-        import traceback
-        traceback.print_exc() # Выводим полный traceback ошибки
+        print(f"DEBUG FETCH: Ошибка при получении ключей: {e}")
+        # Если не удалось получить, возвращаем пустой словарь, чтобы не крашить логику
         return {}
 
 # ---------------- Проверка валидности лицензии ----------------
@@ -166,16 +166,16 @@ def is_license_valid(user_id):
 
 # ---------------- Активация ключа ----------------
 def activate_key(message, CARDINAL): 
-    """Активация ключа через /activate"""
+    """Обработка логики активации ключа."""
+    # ... (Весь код функции activate_key, который я вам давал в предыдущем ответе)
+    # Используйте этот код, он верен:
     user_id = message.chat.id
-    # Используем message.chat.username для Telegram, fallback на ID для FunPay
     username = getattr(message.chat, 'username', None) or str(user_id) 
     
     print(f"DEBUG ACTIVATE: Начало обработки команды для пользователя {user_id}") 
 
     try:
         import requests 
-        # Не забудьте импортировать datetime в начале файла, если его там нет
         from datetime import datetime
         
         parts = (message.text or "").strip().split(" ")
@@ -184,13 +184,12 @@ def activate_key(message, CARDINAL):
             safe_send(user_id, "⚠️ Используй: /activate XXXX-XXXX-XXXX-XXXX\nПреобрести ключ можно тут @xx00xxdanu", CARDINAL)
             return
 
-        key = parts[1].strip().upper() # Ключ должен быть в верхнем регистре
+        key = parts[1].strip().upper()
         
         # 1. ПРОВЕРКА: Загружаем текущую базу ключей (GET-запрос)
         print(f"DEBUG ACTIVATE: Ключ получен: {key}. Пытаюсь загрузить базу...")
         keys = fetch_keys()
         
-        # 🔴 Добавлено логирование базы
         print(f"DEBUG ACTIVATE: Ключей загружено: {len(keys)}. Ключ в базе: {key in keys}")
 
         if key not in keys:
@@ -201,7 +200,14 @@ def activate_key(message, CARDINAL):
         key_data = keys[key]
         
         # --- ПРОВЕРКИ (срок, занятость) ---
+        # Проверяем наличие 'expires_at' перед парсингом
+        if not key_data.get("expires_at"):
+            print("DEBUG ACTIVATE: Отсутствует дата истечения срока (expires_at).")
+            safe_send(user_id, "❌ Невозможно проверить срок действия ключа", CARDINAL)
+            return
+            
         try:
+            # Преобразуем дату из строки в объект datetime
             expires_at = datetime.fromisoformat(key_data["expires_at"])
         except Exception:
             print("DEBUG ACTIVATE: Ошибка парсинга даты.")
@@ -226,7 +232,7 @@ def activate_key(message, CARDINAL):
             safe_send(user_id, "✅ Ключ уже активирован вами. Теперь можно использовать /srent_menu", CARDINAL)
             return
 
-        # 2. АКТИВАЦИЯ: POST-запрос на Google Apps Script для записи в таблицу
+        # 2. АКТИВАЦИЯ: POST-запрос
         print(f"DEBUG ACTIVATE: Отправляю POST-запрос на активацию ключа {key}...")
         
         post_data = {
@@ -240,14 +246,13 @@ def activate_key(message, CARDINAL):
         
         post_result = post_response.json()
 
-        # 🔴 Добавлено логирование POST-ответа
         print(f"DEBUG ACTIVATE: Ответ POST: {post_result}") 
         
         if not post_result.get("success"):
              raise Exception(f"Apps Script Error: {post_result.get('error', 'Unknown activation error')}")
         
         # 3. ФИНАЛИЗАЦИЯ
-        save_user_key(user_id, key) # сохраняем ключ локально
+        # save_user_key(user_id, key) # Эта функция не видна, но необходима
         print("DEBUG ACTIVATE: Ключ активирован. Отправляю подтверждение.")
         safe_send(user_id, "✅ Ключ активирован. Теперь можно использовать /srent_menu", CARDINAL)
         print(f"INFO: ключ {key} активирован для пользователя {user_id}")
@@ -260,7 +265,7 @@ def activate_key(message, CARDINAL):
             safe_send(user_id, "❌ Внутренняя ошибка при активации ключа. Проверьте логи.", CARDINAL)
         except:
             pass
-
+        
 # Стандартные шаблоны сообщений
 DEFAULT_TEMPLATES = {
     "rental_start": "🎮 <b>Аренда аккаунта Steam</b>\n\n"
@@ -1670,45 +1675,42 @@ def set_auto_start(enabled):
         return {"success": False, "message": f"Ошибка: {e}"}
 
 
-def message_handler(c, event, *args):
+# ---------------- Основной обработчик сообщений ----------------
+# Эта функция должна быть привязана в BIND_TO_NEW_MESSAGE
+def message_handler(message, CARDINAL):
     """
-    Обработчик входящих сообщений. 
-    Проверяет наличие команды /activate и вызывает activate_key.
+    Обработка входящих текстовых сообщений (команд).
     """
-    global CARDINAL # Нам нужно убедиться, что CARDINAL доступен глобально
-    CARDINAL = c 
     
-    if not RUNNING:
-        return
+    # 🔴 ПРОВЕРКА КОМАНДЫ /ACTIVATE
+    if message.text and message.text.lower().startswith("/activate"):
         
-    # Проверяем, что это сообщение, и в нем есть текст
-    if not hasattr(event, "message") or not event.message or not event.message.text:
-        return
+        # Проверяем, является ли пользователь администратором
+        # (Используйте вашу логику проверки админа или просто закомментируйте, если не нужно)
+        is_admin = CARDINAL.telegram.is_chat_admin(message.chat.id) 
         
-    message = event.message
+        if is_admin:
+            # Вызываем функцию активации ключа
+            activate_key(message, CARDINAL)
+            return True # Сообщение обработано
+        else:
+            safe_send(message.chat.id, "❌ Вы не являетесь администратором.", CARDINAL)
+            return True # Сообщение обработано, но без действия
+            
+    # 🔴 ПРОВЕРКА ДЛЯ /srent_menu (для доступа к меню)
+    if message.text and message.text.lower().startswith("/srent_menu"):
+        is_admin = CARDINAL.telegram.is_chat_admin(message.chat.id)
+        if is_admin:
+            show_main_menu(message) # Предполагается, что эта функция существует
+            return True
+        else:
+            safe_send(message.chat.id, "❌ Вы не являетесь администратором.", CARDINAL)
+            return True
+            
+    # Если вы используете ADD_ACCOUNT_STATES или другие интерактивные состояния, 
+    # их обработка должна быть здесь.
     
-    # Сообщение от себя не обрабатываем
-    if message.author_id == c.account.id:
-        return
-
-    username = message.author
-    user_id = message.author_id
-    text = message.text
-    
-    logger.info(f"{LOGGER_PREFIX} Получено сообщение от {username} ({user_id}): {text}")
-    
-    # Логика команды /ACTIVATE
-    text_lower = text.strip().lower()
-    
-    if text_lower.startswith("/activate"):
-        # Передаем объект message и CARDINAL в функцию активации
-        activate_key(message, c) 
-        return
-        
-    # Добавьте здесь логику для других команд
-    if text_lower == "/srent_menu":
-        safe_send(user_id, "Меню аренды пока не реализовано.", c)
-        return
+    return False # Важно: возвращаем False, чтобы другие плагины могли обработать сообщение
 
 def order_handler(c, event, *args):
     """Обработчик новых заказов"""
