@@ -64,23 +64,20 @@ DATA_DIR = os.path.dirname(os.path.abspath(__file__))
 KEYS_URL = "https://raw.githubusercontent.com/Josu2003/steam_rental_plugin/refs/heads/main/license.json"
 
 # ---------------- Безопасная отправка сообщений ----------------
-# Измененная safe_send для диагностики
 def safe_send(chat_id, text, CARDINAL):
+    """Отправка сообщений пользователю с fallback."""
     try:
         if getattr(CARDINAL, "telegram", None) and getattr(CARDINAL.telegram, "bot", None):
-            # Проверяем, работает ли основной метод
-            print(f"DEBUG: Попытка отправить через CARDINAL.telegram.bot в {chat_id}") # <-- ДОБАВЛЕНО
             CARDINAL.telegram.bot.send_message(chat_id, text)
         elif hasattr(CARDINAL, "send_message"):
-            # Проверяем, работает ли альтернативный метод
-            print(f"DEBUG: Попытка отправить через CARDINAL.send_message в {chat_id}") # <-- ДОБАВЛЕНО
             CARDINAL.send_message(chat_id, text)
         else:
-            # Если нет ни одного метода
-            print(f"DEBUG: Нет метода отправки сообщений. Text: {text}")
+            print(f"DEBUG: Нет метода отправки сообщений в чат {chat_id}. Text: {text}")
     except Exception as e:
-        # Если при попытке отправки произошла ошибка
-        print(f"DEBUG: КРИТИЧЕСКАЯ ошибка при отправке сообщения: {e}") # <-- ИЗМЕНЕНО
+        # Усиленное логирование: выводим полный traceback для диагностики сетевых ошибок
+        print(f"DEBUG: КРИТИЧЕСКАЯ ошибка при отправке сообщения в {chat_id}: {e}")
+        import traceback # Убедитесь, что traceback импортирован!
+        traceback.print_exc()
 
 # ---------------- Работа с локальными ключами ----------------
 def load_all_user_keys():
