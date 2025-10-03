@@ -1,11 +1,12 @@
 {
   "H7C4-IK3I-FMEQ-JHP4": {
-    "user_id": 7546345235,
-    "username": "Danu",
-    "status": "active",
-    "activation_date": "2025-03-10T09:00:00",
+    "user_id": null,
+    "username": null,
+    "status": "available",
+    "activation_date": null,
     "expires_at": "2099-12-31T23:59:59",
     "version": "6.6.7"
   }
 }
+
 
