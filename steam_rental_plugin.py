@@ -29,6 +29,21 @@ SETTINGS_PAGE = False
 logger = logging.getLogger("FPC.Steam_Rental")
 LOGGER_PREFIX = "[Steam_Rental]"
 
+# --- ДОБАВЬТЕ ЭТОТ БЛОК ---
+# 1. Создаем консольный обработчик
+ch = logging.StreamHandler(sys.stdout)
+# 2. Устанавливаем минимальный уровень: DEBUG
+ch.setLevel(logging.DEBUG) 
+# 3. Применяем формат (по желанию)
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s - %(message)s')
+ch.setFormatter(formatter)
+# 4. Добавляем обработчик к логгеру плагина
+if not logger.handlers: # Проверяем, чтобы не добавить несколько раз
+    logger.addHandler(ch)
+# 5. Устанавливаем уровень самого логгера
+logger.setLevel(logging.DEBUG)
+# ---------------------------
+
 # Глобальные константы
 DATA_DIR = os.path.join("data", "steam_rental")
 ACCOUNTS_FILE = os.path.join(DATA_DIR, "accounts.json")
