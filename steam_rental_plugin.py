@@ -1630,6 +1630,7 @@ def set_auto_start(enabled):
         return {"success": False, "message": f"Ошибка: {e}"}
 
 def message_handler(c, event, *args):
+    logger.info(f"{LOGGER_PREFIX} ПОЛУЧЕНО СООБЩЕНИЕ ОТ {message.chat.id}: {message.text}") # <--- ДОБАВИТЬ ЭТУ СТРОКУ
     """Обработчик входящих сообщений"""
     if not RUNNING:
         return
