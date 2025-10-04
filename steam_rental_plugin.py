@@ -15,6 +15,8 @@ import hmac
 import telebot.types 
 import traceback
 
+from license_manager import LicenseManager
+license_manager = LicenseManager()
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 
 # Информация о плагине (обязательные поля)
@@ -79,236 +81,52 @@ def safe_send(chat_id: int, text: str, CARDINAL) -> None:
         import traceback
         traceback.print_exc()
 
-
-
-# ---------------- Работа с локальными ключами ----------------
-def load_all_user_keys():
-    """Загружает все локальные ключи"""
-    license_file = os.path.join(DATA_DIR, "license.json")
-    if not os.path.exists(license_file):
-        return {}
-    try:
-        with open(license_file, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception as e:
-        print(f"DEBUG: не удалось прочитать license.json: {e}")
-        return {}
-
-# ---------------- Работа с локальными ключами ----------------
-
-def save_user_key(user_id, key):
-    """Сохраняет активированный ключ в локальный файл для быстрой проверки."""
-    # Сохраняем user_id -> key в отдельный файл, чтобы не путать с общей базой
-    license_file = os.path.join(DATA_DIR, "active_key.json") 
-    
-    # Храним только один активный ключ для текущего пользователя Cardinal
-    data = {str(user_id): key} 
-    
-    try:
-        with open(license_file, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        print(f"DEBUG: Локальный ключ {key} сохранен для {user_id}")
-    except Exception as e:
-        print(f"DEBUG: не удалось сохранить active_key.json: {e}")
-
-def get_user_key(user_id):
-    """Возвращает ключ пользователя из локального файла."""
-    license_file = os.path.join(DATA_DIR, "active_key.json")
-    if not os.path.exists(license_file):
-        return None
-        
-    try:
-        with open(license_file, "r", encoding="utf-8") as f:
-            all_keys = json.load(f)
-            # Возвращаем ключ, который сохранен для текущего ID
-            return all_keys.get(str(user_id)) 
-    except Exception as e:
-        print(f"DEBUG: не удалось прочитать active_key.json: {e}")
-        return None
-# ---------------- Работа с удалённой базой ключей ----------------
-def fetch_keys():
-    """Отправляет GET-запрос в Google Apps Script и возвращает словарь ключей."""
-    try:
-        import requests
-        import traceback # Импортируем traceback для полного отчета
-        # Используем глобальную константу KEYS_URL
-        print("DEBUG FETCH: Отправляю GET-запрос для получения ключей...")
-        
-        # Устанавливаем таймаут 10 секунд, чтобы не ждать долго
-        response = requests.get(KEYS_URL, timeout=10) 
-        
-        response.raise_for_status() # Вызовет исключение при 4xx/5xx ошибке
-        keys = response.json()
-        print(f"DEBUG FETCH: Успешно загружено {len(keys)} ключей.")
-        return keys
-    except Exception as e:
-        # Теперь мы выводим полный отчет об ошибке, включая тип сбоя (Timeout, Proxy, DNS и т.д.)
-        print(f"DEBUG FETCH: КРИТИЧЕСКАЯ ОШИБКА ПРИ ПОЛУЧЕНИИ КЛЮЧЕЙ: {e}")
-        traceback.print_exc()
-        # Если не удалось получить, возвращаем пустой словарь, чтобы не крашить логику
-        return {}
-
-# ---------------- Проверка валидности лицензии ----------------
-def is_license_valid(user_id):
-    """Проверяет валидность ключа"""
-    key = get_user_key(user_id)
-    if not key:
-        return False, "❌ Нет активированного ключа. Используй /activate XXXX-XXXX-XXXX-XXXX\nПреобрести ключ можно тут @xx00xxdanu"
-
-    keys = fetch_keys()
-    if key not in keys:
-        return False, "❌ Ключ не найден\nПреобрести ключ можно тут @xx00xxdanu"
-
-    key_data = keys[key]
-    try:
-        expires_at = datetime.fromisoformat(key_data["expires_at"])
-    except Exception as e:
-        print(f"DEBUG: ошибка парсинга даты истечения: {e}")
-        return False, "❌ Невозможно проверить срок действия ключа"
-
-    if datetime.now() > expires_at:
-        return False, "⏰ Срок действия ключа истёк\nПреобрести ключ можно тут @xx00xxdanu"
-
-    if key_data.get("user_id") and key_data["user_id"] != user_id:
-        return False, "🔒 Ключ активирован другим пользователем\nПреобрести ключ можно тут @xx00xxdanu"
-
-    return True, "✅ Лицензия активна"
-
-# ---------------- Активация ключа ----------------
-def activate_key(message, CARDINAL): 
-    """Обработка логики активации ключа."""
-    # ... (Весь код функции activate_key, который я вам давал в предыдущем ответе)
-    # Используйте этот код, он верен:
-    user_id = message.chat.id
-    username = getattr(message.chat, 'username', None) or str(user_id) 
-    
-    print(f"DEBUG ACTIVATE: Начало обработки команды для пользователя {user_id}") 
-
-    try:
-        import requests 
-        from datetime import datetime
-        
-        parts = (message.text or "").strip().split(" ")
-        if len(parts) < 2:
-            print("DEBUG ACTIVATE: Нет ключа в команде. Отправляю ошибку.")
-            safe_send(user_id, "⚠️ Используй: /activate XXXX-XXXX-XXXX-XXXX\nПреобрести ключ можно тут @xx00xxdanu", CARDINAL)
-            return
-
-        key = parts[1].strip().upper()
-        
-        # 1. ПРОВЕРКА: Загружаем текущую базу ключей (GET-запрос)
-        print(f"DEBUG ACTIVATE: Ключ получен: {key}. Пытаюсь загрузить базу...")
-        keys = fetch_keys()
-        
-        print(f"DEBUG ACTIVATE: Ключей загружено: {len(keys)}. Ключ в базе: {key in keys}")
-
-        if key not in keys:
-            print("DEBUG ACTIVATE: Ключ не найден. Отправляю ошибку.")
-            safe_send(user_id, "❌ Ключ не найден\nПреобрести ключ можно тут @xx00xxdanu", CARDINAL)
-            return
-
-        key_data = keys[key]
-        
-        # --- ПРОВЕРКИ (срок, занятость) ---
-        # Проверяем наличие 'expires_at' перед парсингом
-        if not key_data.get("expires_at"):
-            print("DEBUG ACTIVATE: Отсутствует дата истечения срока (expires_at).")
-            safe_send(user_id, "❌ Невозможно проверить срок действия ключа", CARDINAL)
-            return
-            
-        try:
-            # Преобразуем дату из строки в объект datetime
-            expires_at = datetime.fromisoformat(key_data["expires_at"])
-        except Exception:
-            print("DEBUG ACTIVATE: Ошибка парсинга даты.")
-            safe_send(user_id, "❌ Невозможно проверить срок действия ключа", CARDINAL)
-            return
-
-        if datetime.now() > expires_at:
-            print("DEBUG ACTIVATE: Срок действия истек.")
-            safe_send(user_id, "⏰ Срок действия ключа истёк\nПреобрести ключ можно тут @xx00xxdanu", CARDINAL)
-            return
-            
-        current_status = key_data.get("status")
-        current_user_id = str(key_data.get("user_id")) # Сравниваем со строкой
-        
-        if current_status == "active" and current_user_id and current_user_id != str(user_id):
-            print("DEBUG ACTIVATE: Ключ занят другим пользователем.") 
-            safe_send(user_id, "🔒 Ключ уже используется другим пользователем\nПреобрести ключ можно тут @xx00xxdanu", CARDINAL)
-            return
-            
-        if current_status == "active" and current_user_id == str(user_id):
-            print("DEBUG ACTIVATE: Ключ уже активирован текущим пользователем.")
-            safe_send(user_id, "✅ Ключ уже активирован вами. Теперь можно использовать /srent_menu", CARDINAL)
-            return
-
-        # 2. АКТИВАЦИЯ: POST-запрос
-        print(f"DEBUG ACTIVATE: Отправляю POST-запрос на активацию ключа {key}...")
-        
-        post_data = {
-            "key": key,
-            "user_id": user_id,
-            "username": username
-        }
-        
-        post_response = requests.post(KEYS_URL, json=post_data, timeout=30)
-        post_response.raise_for_status()
-        
-        post_result = post_response.json()
-
-        print(f"DEBUG ACTIVATE: Ответ POST: {post_result}") 
-        
-        if not post_result.get("success"):
-             raise Exception(f"Apps Script Error: {post_result.get('error', 'Unknown activation error')}")
-        
-        # 3. ФИНАЛИЗАЦИЯ
-        # save_user_key(user_id, key) # Эта функция не видна, но необходима
-        print("DEBUG ACTIVATE: Ключ активирован. Отправляю подтверждение.")
-        safe_send(user_id, "✅ Ключ активирован. Теперь можно использовать /srent_menu", CARDINAL)
-        print(f"INFO: ключ {key} активирован для пользователя {user_id}")
-
-    except Exception as e:
-        import traceback
-        print(f"DEBUG ACTIVATE: КРИТИЧЕСКАЯ UNHANDLED ERROR: {e}")
-        traceback.print_exc()
-        try:
-            safe_send(user_id, "❌ Внутренняя ошибка при активации ключа. Проверьте логи.", CARDINAL)
-        except:
-            pass
         
 # ---------------- ОСНОВНОЙ ОБРАБОТЧИК СООБЩЕНИЙ (message_handler) ----------------
 def message_handler(message, CARDINAL):
     """
     Обработка входящих текстовых сообщений (команд) от любых пользователей.
     """
-    
     current_user_id = str(message.chat.id)
-    
-    # 🔴 ПРОВЕРКА КОМАНДЫ /ACTIVATE (для всех пользователей)
+
+    # 🔴 ПРОВЕРКА КОМАНДЫ /activate (активация лицензии)
     if message.text and message.text.lower().startswith("/activate"):
-        
-        # Если команда найдена, просто вызываем логику активации.
-        print(f"DEBUG HANDLER: Обнаружена команда /activate от {current_user_id}. Вызываю activate_key.")
-        activate_key(message, CARDINAL)
-        return True # Сообщение обработано
-            
-    # 🔴 ПРОВЕРКА ДЛЯ /srent_menu (доступно только администратору)
+        from license_manager import LicenseManager
+        license_manager = LicenseManager()
+        license_manager.activate_command(message, CARDINAL)
+        return True  # Сообщение обработано
+
+    # 🔴 ПРОВЕРКА КОМАНДЫ /srent_menu (доступно всем, требует активной лицензии)
     if message.text and message.text.lower().startswith("/srent_menu"):
-        
-        # Оставим проверку администратора для меню, т.к. там админские настройки
-        ADMIN_ID = "7546345235" # Ваш ID, используем его для проверки
-        is_admin = CARDINAL.telegram.is_chat_admin(message.chat.id) or current_user_id == ADMIN_ID
-        
-        if is_admin:
-            # show_main_menu(message) 
-            safe_send(current_user_id, "🚧 Меню аренды (только для админа).", CARDINAL)
+        from license_manager import LicenseManager
+        license_manager = LicenseManager()
+
+        # Проверяем наличие активной лицензии
+        if not license_manager.is_valid():
+            safe_send(
+                current_user_id,
+                "🔐 <b>Лицензия не активирована</b>\n\n"
+                "Чтобы получить доступ, активируйте ключ:\n"
+                "<code>/activate XXXX-XXXX-XXXX-XXXX</code>",
+                CARDINAL
+            )
             return True
-        else:
-            safe_send(current_user_id, "❌ Доступ к меню запрещен. Команда /activate работает для всех.", CARDINAL)
-            return True
-            
-    # Если команда не относится к этому плагину, возвращаем False
+
+        # Если лицензия активна — запускаем меню
+        safe_send(
+            current_user_id,
+            "✅ <b>Лицензия активна!</b>\nОткрываю меню аренды...",
+            CARDINAL
+        )
+
+        # 👉 Здесь можно вызвать основное меню
+        # Например:
+        # show_main_menu(message)
+        return True
+
+    # ⚙️ Если команда не относится к плагину
     return False
+
         
 # Стандартные шаблоны сообщений
 DEFAULT_TEMPLATES = {
