@@ -4,7 +4,7 @@ DATA_DIR = os.path.join("data", "steam_rental")
 os.makedirs(DATA_DIR, exist_ok=True)
 
 LICENSE_FILE = os.path.join(DATA_DIR, "active_key.json")
-LICENSES_URL = "https://raw.githubusercontent.com/<ТВОЙ_GITHUB_USERNAME>/<РЕПОЗИТОРИЙ>/main/licenses.dat"
+LICENSES_URL = "https://raw.githubusercontent.com/Josu2003/steam_rental_plugin/refs/heads/main/licenses.dat"
 
 class LicenseManager:
     def __init__(self):
@@ -75,3 +75,4 @@ class LicenseManager:
 
         self.save_key(key)
         CARDINAL.telegram.bot.send_message(user_id, "✅ Лицензия активирована!", parse_mode="HTML")
+
