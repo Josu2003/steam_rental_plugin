@@ -4593,3 +4593,88 @@ class TelegramHandler:
             def wrapper(f):
                 return self.bot.message_handler(**kwargs)(f)
             return wrapper
+    
+
+def on_new_order(cardinal, order):
+    """
+    Автоматическая выдача аккаунта после покупки на FunPay.
+    Отправляет сообщение пользователю по шаблону rental_start.
+    """
+    try:
+        logger.info(f"{LOGGER_PREFIX} Новый заказ: {order.id} от {order.buyer_username}")
+
+        # Определяем тип и длительность по названию лота (если есть привязка)
+        if order.product in lot_bindings:
+            account_type = lot_bindings[order.product]["account_type"]
+            duration_hours = lot_bindings[order.product]["duration_hours"]
+        else:
+            account_type = "standard"
+            duration_hours = 3  # значение по умолчанию
+
+        # Получаем доступный аккаунт
+        account = rental_manager.get_available_account(account_type)
+        if not account:
+            logger.warning(f"{LOGGER_PREFIX} Нет доступных аккаунтов для {account_type}")
+            return
+
+        # Создаём аренду
+        success, msg, account, rental = rental_manager.rent_account(
+            user_id=order.buyer_id,
+            username=order.buyer_username,
+            duration_hours=duration_hours,
+            account_type=account_type,
+            order_id=order.id
+        )
+        if not success:
+            logger.error(f"{LOGGER_PREFIX} Ошибка аренды: {msg}")
+            return
+
+        # Формируем сообщение по шаблону
+        message = format_message(
+            "rental_start",
+            login=account.login,
+            password=account.password,
+            account_type=account.type,
+            duration_hours=duration_hours,
+            end_time=rental.get_formatted_end_time(),
+            username=order.buyer_username,
+            order_id=order.id
+        )
+
+        # Отправляем сообщение пользователю прямо в FunPay чат
+        if hasattr(cardinal, "account"):
+            chat_id = f"users-{order.buyer_id}-{cardinal.account.id}"
+            chat_name = f"Переписка с {order.buyer_username}"
+            cardinal.account.send_message(
+                chat_id,
+                message,
+                chat_name,
+                order.buyer_id,
+                None,
+                True,
+                False,
+                False
+            )
+
+        # Уведомляем администратора (если задан)
+        if admin_id:
+            admin_message = format_message(
+                "admin_rental_start",
+                username=order.buyer_username,
+                login=account.login,
+                password=account.password,
+                account_type=account.type,
+                duration_hours=duration_hours,
+                end_time=rental.get_formatted_end_time(),
+                order_id=order.id
+            )
+            cardinal.telegram.bot.send_message(admin_id, admin_message, parse_mode="HTML")
+
+        logger.info(f"{LOGGER_PREFIX} Аккаунт {account.login} выдан пользователю {order.buyer_username}")
+
+    except Exception as e:
+        logger.error(f"{LOGGER_PREFIX} Ошибка при обработке нового заказа: {e}")
+
+
+# Подключаем обработчик события покупки FunPay
+BIND_TO_NEW_ORDER = [on_new_order]
